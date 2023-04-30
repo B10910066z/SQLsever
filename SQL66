@@ -210,33 +210,169 @@ ORDER BY SUM(Total) DESC
 -- 找出有敗過銷售金額前三高個產品所屬類別的前三個大客戶
 
 -- 列出消費總金額高於所有客戶平均消費總金額的客戶的名字，以及客戶的消費總金額
-WITH t1 AS
+WITH ta
+AS
 (
-    SELECT
-        p.*,
-        od.*,
-        od.UnitPrice * od.Quantity * (1 - od.Discount) AS Total
-    FROM Products p
-    INNER JOIN [Order Details] od ON od.ProductID = p.ProductID
+	SELECT
+		c.CustomerID,
+		SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS Total
+	FROM Customers c
+	INNER JOIN Orders o ON c.CustomerID = o.CustomerID
+	INNER JOIN [Order Details] od ON o.OrderID = od.OrderID
+	GROUP BY c.CustomerID
+)
+SELECT
+	CustomerID, Total
+FROM ta
+WHERE Total > ( 
+	SELECT
+		AVG(Total)
+	FROM ta
 )
 
-
-
 -- 列出最熱銷的產品，以及被購買的總金額
+WITH tb
+AS
+(
+	SELECT 
+		p.ProductName,
+		SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS Total
+	FROM Products p
+	INNER JOIN [Order Details] od ON p.ProductID = od.ProductID
+	GROUP BY p.ProductName
+)
+
+SELECT  TOP 1
+	ProductName, Total
+FROM tb
+ORDER BY Total DESC
+
 
 -- 列出最少人買的產品
+WITH tc
+AS
+(
+	SELECT
+		p.ProductName, COUNT(p.ProductName) AS CountProduct
+	FROM Products p
+	INNER JOIN [Order Details] od ON p.ProductID = od.ProductID
+	GROUP BY p.ProductName
+)
+
+SELECT TOP 1
+	ProductName
+FROM tc
+ORDER BY CountProduct
+	
 
 -- 列出最沒人要買的產品類別 (Categories)
+WITH td
+AS
+(
+	SELECT
+		c.CategoryName, COUNT(c.CategoryName) AS CountCategoryName
+	FROM Categories c
+	INNER JOIN Products p ON c.CategoryID = p.CategoryID
+	INNER JOIN [Order Details] od ON p.ProductID = od.ProductID
+	GROUP BY c.CategoryName
+)
+
+SELECT TOP 1
+	CategoryName
+FROM td
+ORDER BY CountCategoryName
 
 -- 列出跟銷售最好的供應商買最多金額的客戶與購買金額 (含購買其它供應商的產品)
+WITH te
+AS
+(
+	SELECT TOP 1
+		s.CompanyName,
+		SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS SupplierTotal
+	FROM Suppliers s
+	INNER JOIN Products p ON s.SupplierID = p.SupplierID
+	INNER JOIN [Order Details] od ON p.ProductID = od.ProductID
+	GROUP BY s.CompanyName
+	ORDER BY SupplierTotal DESC
+)
+SELECT TOP 1
+	c.CustomerID,
+	SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS Total
+FROM Customers c 
+INNER JOIN Orders o ON o.CustomerID = c.CustomerID
+INNER JOIN [Order Details] od ON o.OrderID = od.OrderID
+INNER JOIN Products p ON od.ProductID = p.ProductID
+INNER JOIN Suppliers s ON p.SupplierID = s.SupplierID
+--INNER JOIN te ON s.CompanyName = te.CompanyName 
+GROUP BY c.CustomerID
+ORDER BY Total DESC
 
 -- 列出跟銷售最好的供應商買最多金額的客戶與購買金額 (不含購買其它供應商的產品)
+WITH tf
+AS
+(
+	SELECT TOP 1
+		s.CompanyName,
+		SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS SupplierTotal
+	FROM Suppliers s
+	INNER JOIN Products p ON s.SupplierID = p.SupplierID
+	INNER JOIN [Order Details] od ON p.ProductID = od.ProductID
+	GROUP BY s.CompanyName
+	ORDER BY SupplierTotal DESC
+)
+SELECT TOP 1
+	c.CustomerID,
+	SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS Total
+FROM Customers c 
+INNER JOIN Orders o ON o.CustomerID = c.CustomerID
+INNER JOIN [Order Details] od ON o.OrderID = od.OrderID
+INNER JOIN Products p ON od.ProductID = p.ProductID
+INNER JOIN Suppliers s ON p.SupplierID = s.SupplierID
+WHERE s.CompanyName IN (
+	SELECT	
+		CompanyName
+	FROM tf
+)
+GROUP BY c.CustomerID
+ORDER BY Total DESC
 
 -- 列出那些產品沒有人買過
+WITH tg
+AS
+(
+	SELECT
+		p.ProductName, 
+		SUM(od.UnitPrice) AS Total
+	FROM Products p
+	LEFT OUTER JOIN [Order Details] od ON od.ProductID = p.ProductID
+	GROUP BY p.ProductName
+)
+
+SELECT
+	*
+FROM tg
+WHERE Total = 0
+
 
 -- 列出沒有傳真 (Fax) 的客戶和它的消費總金額
+SELECT
+	c.CustomerID, SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) AS Total
+FROM Customers c
+INNER JOIN Orders o ON c.CustomerID = o.CustomerID
+INNER JOIN [Order Details] od ON o.OrderID = od.OrderID
+WHERE Fax IS NULL
+GROUP BY c.CustomerID
 
 -- 列出每一個城市消費的產品種類數量
+SELECT
+	c.City,  COUNT(DISTINCT cg.CategoryID) AS CountCity --DISTINCT也可以這樣用
+FROM Customers c
+INNER JOIN Orders o ON c.CustomerID = o.CustomerID
+INNER JOIN [Order Details] od ON o.OrderID = od.OrderID
+INNER JOIN Products p ON od.ProductID = p.ProductID
+INNER JOIN Categories cg ON p.CategoryID = cg.CategoryID
+GROUP BY c.City
+
 
 -- 列出目前沒有庫存的產品在過去總共被訂購的數量
 
